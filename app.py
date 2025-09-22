@@ -14,19 +14,19 @@ col1, col2 = st.columns([1, 3])  # Adjust ratio as needed
 with col1:
     st.header("Heatmap Generator")
     # Upload Excel File
-    uploaded_leaf_file = st.file_uploader("Upload your Excel file for Leaf", type=["xlsx"])
-    uploaded_root_file = st.file_uploader("Upload your Excel file for Root", type=["xlsx"])
+    uploaded_first_file = st.file_uploader("Upload your first Excel file", type=["xlsx"])
+    uploaded_second_file = st.file_uploader("Upload your second Excel file", type=["xlsx"])
 
     # Sidebar controls
     st.sidebar.header("Controls")
-    sheet_leaf = "sigDEG_FC1"
-    sheet_root = "sigDEG_FC1"
-    if uploaded_leaf_file is not None:
-        xl_leaf = pd.ExcelFile(uploaded_leaf_file)
-        sheet_leaf = st.sidebar.selectbox("Select Leaf Sheet", xl_leaf.sheet_names, index=xl_leaf.sheet_names.index("sigDEG_FC1") if "sigDEG_FC1" in xl_leaf.sheet_names else 0)
-    if uploaded_root_file is not None:
-        xl_root = pd.ExcelFile(uploaded_root_file)
-        sheet_root = st.sidebar.selectbox("Select Root Sheet", xl_root.sheet_names, index=xl_root.sheet_names.index("sigDEG_FC1") if "sigDEG_FC1" in xl_root.sheet_names else 0)
+    sheet_first = "sigDEG_FC1"
+    sheet_second = "sigDEG_FC1"
+    if uploaded_first_file is not None:
+        xl_first = pd.ExcelFile(uploaded_first_file)
+        sheet_first = st.sidebar.selectbox("Select First Sheet", xl_first.sheet_names, index=xl_first.sheet_names.index("sigDEG_FC1") if "sigDEG_FC1" in xl_first.sheet_names else 0)
+    if uploaded_second_file is not None:
+        xl_second = pd.ExcelFile(uploaded_second_file)
+        sheet_second = st.sidebar.selectbox("Select Second Sheet", xl_second.sheet_names, index=xl_second.sheet_names.index("sigDEG_FC1") if "sigDEG_FC1" in xl_second.sheet_names else 0)
 
     # Colormap selection
     colormap_options = {
@@ -46,7 +46,7 @@ with col1:
     vmax = st.sidebar.number_input("vmax", value=None, format="%g")
 
     # Map order selection
-    map_order = st.sidebar.radio("Map Order", ["Leaf-Root", "Root-Leaf"], index=0)
+    # map_order = st.sidebar.radio("Map Order", ["Leaf-Root", "Root-Leaf"], index=0)
 
     # Title, labels, font sizes
     plot_title = st.sidebar.text_input("Plot Title", value="Heatmap (All Data)")
@@ -56,34 +56,38 @@ with col1:
     fontsize_xtick = st.sidebar.number_input("Xtick Fontsize", value=10, min_value=3, max_value=24)
     fontsize_ytick = st.sidebar.number_input("Ytick Fontsize", value=6, min_value=3, max_value=24)
 
-    if uploaded_leaf_file is not None and uploaded_root_file is not None:
+    # Custom x tick labels
+    xtick_label_1 = st.sidebar.text_input("Xtick Label 1", value="logFC_first")
+    xtick_label_2 = st.sidebar.text_input("Xtick Label 2", value="logFC_second")
+
+    if uploaded_first_file is not None and uploaded_second_file is not None:
         st.success("Files uploaded successfully!")
         if st.button("Generate Heatmap"):
             try:
                 # === Step 1. Read Excel File ===
-                df_leaf = pd.read_excel(uploaded_leaf_file, sheet_name=sheet_leaf, header=0)
-                df_root = pd.read_excel(uploaded_root_file, sheet_name=sheet_root, header=0)
+                df_first = pd.read_excel(uploaded_first_file, sheet_name=sheet_first, header=0)
+                df_second = pd.read_excel(uploaded_second_file, sheet_name=sheet_second, header=0)
                 # Check required columns
                 required_cols = {"gene_id", "gene_symbol", "logFC"}
-                if not required_cols.issubset(df_leaf.columns):
-                    st.error(f"Missing required columns in Leaf file. Please ensure your file has: {required_cols}")
-                elif not required_cols.issubset(df_root.columns):
-                    st.error(f"Missing required columns in Root file. Please ensure your file has: {required_cols}")
+                if not required_cols.issubset(df_first.columns):
+                    st.error(f"Missing required columns in First file. Please ensure your file has: {required_cols}")
+                elif not required_cols.issubset(df_second.columns):
+                    st.error(f"Missing required columns in Second file. Please ensure your file has: {required_cols}")
                 else:
-                    columns_to_keep_leaf = ['gene_id', 'gene_symbol'] + [col for col in df_leaf.columns if str(col).startswith('logFC')]
-                    df_leaf = df_leaf[columns_to_keep_leaf]
-                    columns_to_keep_root = ['gene_id', 'gene_symbol'] + [col for col in df_root.columns if str(col).startswith('logFC')]
-                    df_root = df_root[columns_to_keep_root]
+                    columns_to_keep_first = ['gene_id', 'gene_symbol'] + [col for col in df_first.columns if str(col).startswith('logFC')]
+                    df_first = df_first[columns_to_keep_first]
+                    columns_to_keep_second = ['gene_id', 'gene_symbol'] + [col for col in df_second.columns if str(col).startswith('logFC')]
+                    df_second = df_second[columns_to_keep_second]
                     st.write("Data Preview:")
-                    st.dataframe(df_leaf)
-                    st.dataframe(df_root)
-                    # Left join leaf and root dataframes on gene_id
-                    df = pd.merge(df_leaf, df_root, on=['gene_id', 'gene_symbol'], how='left', suffixes=('_leaf', '_root'))
+                    st.dataframe(df_first)
+                    st.dataframe(df_second)
+                    # Left join first and second dataframes on gene_id
+                    df = pd.merge(df_first, df_second, on=['gene_id', 'gene_symbol'], how='left', suffixes=('_first', '_second'))
                     st.dataframe(df)
-                    df["logFC_leaf"] = df["logFC_leaf"].fillna(0)
-                    df["logFC_root"] = df["logFC_root"].fillna(0)
+                    df["logFC_first"] = df["logFC_first"].fillna(0)
+                    df["logFC_second"] = df["logFC_second"].fillna(0)
                     st.dataframe(df)
-                    default_max_abs = max(abs(df["logFC_leaf"].min()), abs(df["logFC_leaf"].max()))
+                    default_max_abs = max(abs(df["logFC_first"].min()), abs(df["logFC_first"].max()))
                     auto_vmin = -default_max_abs
                     auto_vmax = default_max_abs
                     # Use sidebar vmin/vmax if set, else auto
@@ -97,11 +101,13 @@ with col1:
                     df_all = df.copy()
                     df_all.set_index("gene_name", inplace=True)
                     # Map order
-                    if map_order == "Leaf-Root":
-                        df_all = df_all[["logFC_leaf", "logFC_root"]]
-                    else:
-                        df_all = df_all[["logFC_root", "logFC_leaf"]]
-                    df_all_sorted = df_all.sort_values("logFC_leaf", ascending=False)
+                    # if map_order == "Leaf-Root":
+                    #     df_all = df_all[["logFC_leaf", "logFC_root"]]
+                    # else:
+                    #     df_all = df_all[["logFC_root", "logFC_leaf"]]
+                    df_all = df_all[["logFC_first", "logFC_second"]]
+                    df_all.columns = [xtick_label_1, xtick_label_2]
+                    df_all_sorted = df_all.sort_values(xtick_label_1, ascending=False)
                     # === Step 4. Generate Heatmaps ===
                     if isinstance(cmap_value, list):
                         custom_cmap = LinearSegmentedColormap.from_list("custom_cmap", cmap_value)
