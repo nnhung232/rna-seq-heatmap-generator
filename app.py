@@ -101,7 +101,7 @@ with col1:
                         df_all = df_all[["logFC_leaf", "logFC_root"]]
                     else:
                         df_all = df_all[["logFC_root", "logFC_leaf"]]
-                    df_all_sorted = df_all.sort_values("logFC_leaf", ascending=False)
+                    # df_all_sorted = df_all.sort_values("logFC_leaf", ascending=False)
                     # === Step 4. Generate Heatmaps ===
                     if isinstance(cmap_value, list):
                         custom_cmap = LinearSegmentedColormap.from_list("custom_cmap", cmap_value)
@@ -132,7 +132,7 @@ with col1:
                         buf.seek(0)
                         plt.close()
                         return buf
-                    st.session_state["heatmap_buffer_all"] = save_heatmap(df_all_sorted, plot_title, vmin_final, vmax_final)
+                    st.session_state["heatmap_buffer_all"] = save_heatmap(df_all, plot_title, vmin_final, vmax_final)
                     st.success("All heatmaps generated successfully!")
                     st.download_button(
                         label="Download All Data Heatmap",
