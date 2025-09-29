@@ -60,55 +60,98 @@ with col1:
     xtick_label_left = st.sidebar.text_input("Xtick Left")
     xtick_label_right = st.sidebar.text_input("Xtick Right")
 
-    if uploaded_guided_file is not None and uploaded_followed_file is not None:
-        st.success("Files uploaded successfully!")
+    # Check if at least one file is uploaded
+    if uploaded_guided_file is not None:
+        if uploaded_followed_file is not None:
+            st.success("Both files uploaded successfully!")
+        else:
+            st.success("Guided file uploaded successfully! You can generate a single-column heatmap.")
         if st.button("Generate Heatmap"):
             try:
                 # === Step 1. Read Excel File ===
                 df_guided = pd.read_excel(uploaded_guided_file, sheet_name=sheet_guided, header=0)
-                df_followed = pd.read_excel(uploaded_followed_file, sheet_name=sheet_followed, header=0)
-                # Check required columns
+                
+                # Check required columns for guided file
                 required_cols = {"gene_id", "gene_symbol", "logFC"}
                 if not required_cols.issubset(df_guided.columns):
                     st.error(f"Missing required columns in Guided file. Please ensure your file has: {required_cols}")
-                elif not required_cols.issubset(df_followed.columns):
-                    st.error(f"Missing required columns in Followed file. Please ensure your file has: {required_cols}")
                 else:
+                    # Process guided file
                     columns_to_keep_guided = ['gene_id', 'gene_symbol'] + [col for col in df_guided.columns if str(col).startswith('logFC')]
                     df_guided = df_guided[columns_to_keep_guided]
-                    columns_to_keep_followed = ['gene_id', 'gene_symbol'] + [col for col in df_followed.columns if str(col).startswith('logFC')]
-                    df_followed = df_followed[columns_to_keep_followed]
-                    st.write("Data Preview:")
-                    st.dataframe(df_guided)
-                    st.dataframe(df_followed)
-                    # Left join guided and followed dataframes on gene_id
-                    df = pd.merge(df_guided, df_followed, on=['gene_id', 'gene_symbol'], how='left', suffixes=('_guided', '_followed'))
-                    st.dataframe(df)
-                    df["logFC_guided"] = df["logFC_guided"].fillna(0)
-                    df["logFC_followed"] = df["logFC_followed"].fillna(0)
-                    st.dataframe(df)
-                    default_max_abs = max(abs(df["logFC_guided"].min()), abs(df["logFC_guided"].max()))
-                    auto_vmin = -default_max_abs
-                    auto_vmax = default_max_abs
+                    
+                    # Process followed file if uploaded
+                    if uploaded_followed_file is not None:
+                        df_followed = pd.read_excel(uploaded_followed_file, sheet_name=sheet_followed, header=0)
+                        if not required_cols.issubset(df_followed.columns):
+                            st.error(f"Missing required columns in Followed file. Please ensure your file has: {required_cols}")
+                        else:
+                            columns_to_keep_followed = ['gene_id', 'gene_symbol'] + [col for col in df_followed.columns if str(col).startswith('logFC')]
+                            df_followed = df_followed[columns_to_keep_followed]
+                            
+                            st.write("Data Preview:")
+                            st.dataframe(df_guided)
+                            st.dataframe(df_followed)
+                            
+                            # Left join guided and followed dataframes on gene_id
+                            df = pd.merge(df_guided, df_followed, on=['gene_id', 'gene_symbol'], how='left', suffixes=('_guided', '_followed'))
+                            st.dataframe(df)
+                            df["logFC_guided"] = df["logFC_guided"].fillna(0)
+                            df["logFC_followed"] = df["logFC_followed"].fillna(0)
+                            st.dataframe(df)
+                            
+                            default_max_abs = max(abs(df["logFC_guided"].min()), abs(df["logFC_guided"].max()))
+                            auto_vmin = -default_max_abs
+                            auto_vmax = default_max_abs
+                            
+                            # Create gene_name column
+                            def combine_gene_info(row):
+                                if pd.notna(row['gene_symbol']) and str(row['gene_symbol']).strip() != "":
+                                    return f"{row['gene_id']} - {row['gene_symbol']}"
+                                return str(row['gene_id'])
+                            df['gene_name'] = df.apply(combine_gene_info, axis=1)
+                            
+                            df_all = df.copy()
+                            df_all.set_index("gene_name", inplace=True)
+                            
+                            # Map order for two columns
+                            if map_order == "Guided-Followed":
+                                df_all = df_all[["logFC_guided", "logFC_followed"]]
+                            else:
+                                df_all = df_all[["logFC_followed", "logFC_guided"]]
+
+                            if xtick_label_left != "" and xtick_label_right != "":
+                                df_all.columns = [xtick_label_left, xtick_label_right]
+                    else:
+                        # Single file mode - only guided file
+                        st.write("Data Preview:")
+                        st.dataframe(df_guided)
+                        
+                        df = df_guided.copy()
+                        
+                        default_max_abs = max(abs(df["logFC"].min()), abs(df["logFC"].max()))
+                        auto_vmin = -default_max_abs
+                        auto_vmax = default_max_abs
+                        
+                        # Create gene_name column
+                        def combine_gene_info(row):
+                            if pd.notna(row['gene_symbol']) and str(row['gene_symbol']).strip() != "":
+                                return f"{row['gene_id']} - {row['gene_symbol']}"
+                            return str(row['gene_id'])
+                        df['gene_name'] = df.apply(combine_gene_info, axis=1)
+                        
+                        df_all = df.copy()
+                        df_all.set_index("gene_name", inplace=True)
+                        df_all = df_all[["logFC"]]  # Single column
+                        
+                        # Use custom label if provided, otherwise use default
+                        if xtick_label_left != "":
+                            df_all.columns = [xtick_label_left]
+                    
                     # Use sidebar vmin/vmax if set, else auto
                     vmin_final = vmin if vmin is not None and vmin != 0 else auto_vmin
                     vmax_final = vmax if vmax is not None and vmax != 0 else auto_vmax
-                    def combine_gene_info(row):
-                        if pd.notna(row['gene_symbol']) and str(row['gene_symbol']).strip() != "":
-                            return f"{row['gene_id']} - {row['gene_symbol']}"
-                        return str(row['gene_id'])
-                    df['gene_name'] = df.apply(combine_gene_info, axis=1)
-                    df_all = df.copy()
-                    df_all.set_index("gene_name", inplace=True)
-                    # Map order
-                    if map_order == "Guided-Followed":
-                        df_all = df_all[["logFC_guided", "logFC_followed"]]
-                    else:
-                        df_all = df_all[["logFC_followed", "logFC_guided"]]
-
-                    if xtick_label_left != "" and xtick_label_right != "":
-                        df_all.columns = [xtick_label_left, xtick_label_right]
-                    # df_all_sorted = df_all.sort_values("logFC_leaf", ascending=False)
+                    
                     # === Step 4. Generate Heatmaps ===
                     if isinstance(cmap_value, list):
                         custom_cmap = LinearSegmentedColormap.from_list("custom_cmap", cmap_value)
